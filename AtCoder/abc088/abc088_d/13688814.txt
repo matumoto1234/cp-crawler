@@ -1,0 +1,2 @@
+// detail: https://atcoder.jp/contests/abc088/submissions/13688814
+-1
