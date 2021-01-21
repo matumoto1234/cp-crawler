@@ -1,0 +1,8 @@
+// detail: https://atcoder.jp/contests/abc076/submissions/19551258
+#include<bits/stdc++.h>
+using namespace std;
+int main(){
+  int r,g;
+  cin>>r>>g;
+  cout<<2*g-r<<endl;
+}
