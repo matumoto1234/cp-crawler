@@ -1,0 +1,24 @@
+// detail: https://atcoder.jp/contests/abc194/submissions/29920235
+#include <bits/stdc++.h>
+using namespace std;
+
+using ll = long long;
+
+#define rep(i,l,r) for(int i=l;i<r;i++)
+
+int main(){
+    int n;
+    cin >> n;
+    vector<int> A(n),cnt(405);//Aiが何回出るかカウント
+    rep(i,0,n) {
+        cin >> A[i];
+        cnt[A[i]+200]++;
+    }
+    ll ans=0;
+    for(int i=0;i<=400;i++){
+        for(int j=i;j<=400;j++){
+            ans+=ll(cnt[i])*cnt[j]*(j-i)*(j-i);
+        }
+    }
+    cout << ans ;
+}
