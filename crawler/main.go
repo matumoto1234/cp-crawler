@@ -13,9 +13,9 @@ func main() {
 	l := model.NewInfoLogger()
 	l.Println("cp-crawler start.")
 
-	// if err := repository.InitGit(); err != nil {
-	// 	l.Fatalf("%+v\n", err)
-	// }
+	if err := repository.InitGit(); err != nil {
+		l.Printf("%+v\n", err)
+	}
 
 	as := service.NewAtCoderService(variables.AtCoderProblemsAPIBaseURL)
 	au := usecase.NewAtCoderUseCase(as)
