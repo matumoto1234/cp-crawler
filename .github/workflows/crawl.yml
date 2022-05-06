@@ -2,7 +2,7 @@ name: Crawl
 
 on: 
   schedule:
-  - cron:  '06 40 * * *'
+  - cron:  '6 40 * * *'
 
 jobs:
   build:
