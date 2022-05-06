@@ -2,7 +2,8 @@ name: Crawl
 
 on: 
   schedule:
-  - cron:  '6 40 * * *'
+  # 20+9:40 = 5:40 every day
+  - cron:  '40 20 * * *'
 
 jobs:
   build:
