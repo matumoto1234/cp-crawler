@@ -22,5 +22,5 @@ jobs:
     - name: Run crawler
       env: 
         GIT_EMAIL: ${{ secrets.GIT_EMAIL }}
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GITHUB_TOKEN: ${{ secrets.GH_PAT }}
       run: go crawler/main.go
