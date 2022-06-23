@@ -18,7 +18,8 @@ jobs:
       uses: actions/setup-go@v3
       with:
         go-version: "1.18.0"
-      run: go version
+
+    - name: Print Golang version
 
     - name: Change directory and run crawler
       env:
