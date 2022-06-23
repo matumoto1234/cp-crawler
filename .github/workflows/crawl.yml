@@ -1,6 +1,6 @@
 name: Crawl
 
-on: 
+on:
   schedule:
   # 20+9:40 = 5:40 every day
   - cron:  '40 20 * * *'
@@ -19,8 +19,10 @@ jobs:
         sudo tar -C /usr/local -xzf go1.18.linux-amd64.tar.gz
         go version
 
-    - name: Run crawler
-      env: 
+    - name: Change directory and run crawler
+      env:
         GIT_EMAIL: ${{ secrets.GIT_EMAIL }}
         GITHUB_TOKEN: ${{ secrets.GH_PAT }}
-      run: go run crawler/main.go
+      run: |
+        cd crawler
+        go run main.go
