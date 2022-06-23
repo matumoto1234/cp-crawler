@@ -4,6 +4,7 @@ on:
   schedule:
   # 20+9:40 = 5:40 every day
   - cron:  '40 20 * * *'
+  workflow_dispatch:
 
 jobs:
   build:
