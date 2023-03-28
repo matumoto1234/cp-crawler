@@ -1,45 +1,59 @@
 package main
 
 import (
-	"github.com/matumoto1234/cp-crawler/model"
+	"log"
+	"net/http"
+	"os"
+	"time"
+
+	"github.com/gocolly/colly"
+	"github.com/gocolly/colly/debug"
 	"github.com/matumoto1234/cp-crawler/controller"
-	"github.com/matumoto1234/cp-crawler/repository"
-	"github.com/matumoto1234/cp-crawler/service"
+	domain "github.com/matumoto1234/cp-crawler/domain/repository"
+	"github.com/matumoto1234/cp-crawler/infra"
+	"github.com/matumoto1234/cp-crawler/infra/db"
 	"github.com/matumoto1234/cp-crawler/usecase"
-	"github.com/matumoto1234/cp-crawler/variables"
+	"golang.org/x/time/rate"
 )
 
 func main() {
-	l := model.NewInfoLogger()
-	l.Println("cp-crawler start.")
+	logInfo := log.New(os.Stdout, "[INFO] ", log.LstdFlags)
+	logError := log.New(os.Stderr, "[WARN] ", log.LstdFlags)
 
-	if err := repository.InitGit(); err != nil {
-		l.Printf("%+v\n", err)
+	logInfo.Println("cp-crawler started.")
+
+	collector := colly.NewCollector(
+		colly.Debugger(&debug.LogDebugger{}),
+		colly.Async(true),
+	)
+
+	collector.Limit(&colly.LimitRule{
+		Parallelism: 2,
+		RandomDelay: 5 * time.Second,
+	})
+
+	var ac domain.Crawler
+	ac = infra.NewAtcoderCrawler(
+		&http.Client{
+			Transport: infra.NewRateLimitTransport(
+				http.DefaultTransport,
+				rate.NewLimiter(rate.Every(2*time.Second), 1), // 1 request every 2 seconds
+			),
+		},
+		infra.NewScraper(collector),
+	)
+
+	var sr domain.SubmissionRepository
+	sr = infra.NewSubmissionRepository(db.NewGit(), db.NewWriter())
+
+	var au usecase.AtcoderUseCase
+	au = usecase.NewAtcoderUseCase(ac, sr)
+
+	c := controller.NewController(au)
+
+	if err := c.CrawlAndSave(); err != nil {
+		logError.Printf("%+v\n", err)
 	}
 
-	as := service.NewAtCoderService(variables.AtCoderProblemsAPIBaseURL)
-	au := usecase.NewAtCoderUseCase(as)
-
-	sc := controller.NewSubmissionsController(au)
-
-	subs, err := sc.GetSubmissions()
-	if err != nil {
-		l.Fatalf("%+v\n", err)
-	}
-
-	w := controller.NewWriter()
-
-	for _, sub := range subs {
-		if err := w.Write(sub); err != nil {
-			l.Fatalf("%+v\n", err)
-			continue
-		}
-		l.Printf("appended %v\n", sub.SubmissionURL)
-	}
-
-	if err = repository.PushChange(); err != nil {
-		l.Fatalf("%+v\n", err)
-	}
-
-	l.Println("cp-crawler end.")
+	logInfo.Println("cp-crawler finished.")
 }

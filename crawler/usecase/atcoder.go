@@ -1,53 +1,39 @@
 package usecase
 
 import (
-	"github.com/matumoto1234/cp-crawler/model"
-	"github.com/matumoto1234/cp-crawler/service"
+	"context"
+
+	repository "github.com/matumoto1234/cp-crawler/domain/repository"
 )
 
-type AtCoderUseCase interface {
-	GetSubmissions() ([]*model.Submission, error)
+type AtcoderUseCase interface {
+	CrawlAndSave(ctx context.Context) *Error
 }
 
-type atCoderUseCaseImpl struct {
-	as service.AtCoderService
+type atcoderUseCaseImpl struct {
+	c  repository.Crawler
+	sr repository.SubmissionRepository
 }
 
-// The AtCoder Problems API will return up to 500 submissions after the specified time.
-// So, If you want to get the all submissions, get each 500 submissions and change specified time.
-func (au *atCoderUseCaseImpl) GetSubmissions() ([]*model.Submission, error) {
-	unixTime := int64(0)
-
-	allSubs := make([]*model.Submission, 0)
-
-	for {
-		url, err := au.as.MakeURL(unixTime)
-		if err != nil {
-			return nil, err
-		}
-		apis, err := au.as.FetchSubmissions(url)
-		if err != nil {
-			return nil, err
-		}
-
-		if len(apis) == 0 {
-			break
-		}
-
-		subs, err := au.as.ConvertToSubmissions(apis)
-		if err != nil {
-			return nil, err
-		}
-
-		allSubs = append(allSubs, subs...)
-		unixTime = subs[len(subs) - 1].SubmittedAt.Unix()
-		unixTime++ // for next submissions
+func (a atcoderUseCaseImpl) CrawlAndSave(ctx context.Context) *Error {
+	// AtCoderに提出できるソースコード長が最大で512Kib
+	// 512 * 1024 * pageSizeがメモリにのっても大丈夫なpageSizeを指定する
+	page, err := a.c.Do(ctx, 50, 0)
+	if err != nil {
+		return NewError(err, ErrCrawlerError)
 	}
-	return allSubs, nil
+
+	for _, submission := range page.ItemList {
+		if err := a.sr.Save(ctx, submission); err != nil {
+			return NewError(err, ErrRepositoryError)
+		}
+	}
+	return nil
 }
 
-func NewAtCoderUseCase(as service.AtCoderService) AtCoderUseCase {
-	return &atCoderUseCaseImpl{
-		as: as,
+func NewAtcoderUseCase(crawler repository.Crawler, submissionRepo repository.SubmissionRepository) *atcoderUseCaseImpl {
+	return &atcoderUseCaseImpl{
+		c:  crawler,
+		sr: submissionRepo,
 	}
 }
