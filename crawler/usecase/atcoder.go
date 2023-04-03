@@ -7,7 +7,7 @@ import (
 )
 
 type AtcoderUseCase interface {
-	CrawlAndSave(ctx context.Context) *Error
+	CrawlAndSave(ctx context.Context) error
 }
 
 type atcoderUseCaseImpl struct {
@@ -15,23 +15,38 @@ type atcoderUseCaseImpl struct {
 	sr repository.SubmissionRepository
 }
 
-func (a atcoderUseCaseImpl) CrawlAndSave(ctx context.Context) *Error {
-	// AtCoderに提出できるソースコード長が最大で512Kib
-	// 512 * 1024 * pageSizeがメモリにのっても大丈夫なpageSizeを指定する
-	page, err := a.c.Do(ctx, 50, 0)
-	if err != nil {
-		return NewError(err, ErrCrawlerError)
+func (a atcoderUseCaseImpl) CrawlAndSave(ctx context.Context) error {
+	ceilDiv := func(a, b int) int {
+		return (a + b - 1) / b
 	}
 
-	for _, submission := range page.ItemList {
-		if err := a.sr.Save(ctx, submission); err != nil {
-			return NewError(err, ErrRepositoryError)
+	var pageNumber int
+	for {
+		// AtCoderに提出できるソースコード長が最大で512Kib
+		// 512 * 1024 * pageSizeがメモリにのっても大丈夫なpageSizeを指定する
+		page, err := a.c.Do(ctx, 50, pageNumber)
+		if err != nil {
+			return err
+		}
+
+		// pageNumber == ceilDiv(page.Paging.TotalCount, 50)のときは最後のページ
+		if pageNumber == ceilDiv(page.Paging.TotalCount, 50) {
+			break
+		}
+
+		pageNumber++
+
+		for _, submission := range page.ItemList {
+			if err := a.sr.Save(ctx, submission); err != nil {
+				return err
+			}
 		}
 	}
+
 	return nil
 }
 
-func NewAtcoderUseCase(crawler repository.Crawler, submissionRepo repository.SubmissionRepository) *atcoderUseCaseImpl {
+func NewAtcoderUseCase(crawler repository.Crawler, submissionRepo repository.SubmissionRepository) AtcoderUseCase {
 	return &atcoderUseCaseImpl{
 		c:  crawler,
 		sr: submissionRepo,

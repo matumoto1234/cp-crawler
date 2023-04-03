@@ -6,11 +6,11 @@ import (
 	"github.com/matumoto1234/cp-crawler/usecase"
 )
 
-type Controller struct {
+type CrawlerController struct {
 	a usecase.AtcoderUseCase
 }
 
-func (c Controller) CrawlAndSave() error {
+func (c CrawlerController) Do() error {
 	// TODO: CLIツールとして実行するようにする
 	//       e.g. cp-crawler --site atcoder --user matumoto
 
@@ -18,8 +18,8 @@ func (c Controller) CrawlAndSave() error {
 	return c.a.CrawlAndSave(ctx)
 }
 
-func NewController(a usecase.AtcoderUseCase) *Controller {
-	return &Controller{
+func NewController(a usecase.AtcoderUseCase) *CrawlerController {
+	return &CrawlerController{
 		a: a,
 	}
 }

@@ -34,17 +34,35 @@ func (ac atcoderCrawlerImpl) Do(ctx context.Context, pageSize, pageNumber int) (
 		return nil, err
 	}
 
-	// pageNumberで範囲を決めてトリミング
-	left := pageNumber * pageSize
-	if left > len(responseList) {
-		left = len(responseList)
+	max := func(a, b int) int {
+		if a > b {
+			return a
+		}
+		return b
 	}
+
+	if pageSize <= 0 {
+		return nil, errors.New("invalid page size")
+	}
+
+	// 大きすぎるページサイズを調整
+	pageSize = max(pageSize, len(responseList))
+
+	left := pageNumber * pageSize
+	left = max(left, len(responseList))
 
 	right := (pageNumber + 1) * pageSize
-	if right > len(responseList) {
-		right = len(responseList)
+	right = max(right, len(responseList))
+
+	isInside := func(index int) bool {
+		return 0 <= index && index <= len(responseList)
 	}
 
+	if !isInside(left) || !isInside(right) {
+		return nil, errors.New("invalid page number")
+	}
+
+	// pageNumberによる指定ページのトリミング
 	responseList = responseList[left:right]
 
 	// 該当ページをドメインモデルに変換
@@ -61,11 +79,11 @@ func (ac atcoderCrawlerImpl) Do(ctx context.Context, pageSize, pageNumber int) (
 
 	return model.NewPage(
 		submissionList,
-		model.NewPaging(totalCount),
+		model.NewPaging(pageSize, totalCount),
 	), nil
 }
 
-func fetchAtcoderSubmissionAPIResponseList(ctx context.Context, httpClient *http.Client) ([]AtcoderSubmissionAPIResponse, error) {
+func fetchAtcoderSubmissionAPIResponseList(ctx context.Context, httpClient *http.Client) ([]atcoderSubmissionAPIResponse, error) {
 	u, err := url.Parse("https://kenkoooo.com/atcoder/atcoder-api/v3/user/submissions")
 	if err != nil {
 		return nil, errors.WithStack(err)
@@ -76,7 +94,7 @@ func fetchAtcoderSubmissionAPIResponseList(ctx context.Context, httpClient *http
 	q.Set("from_second", "0")
 	u.RawQuery = q.Encode()
 
-	allResponseList := make([]AtcoderSubmissionAPIResponse, 0)
+	allResponseList := make([]atcoderSubmissionAPIResponse, 0)
 
 	// ページネーションされているレスポンスをすべて取得する
 	// 1ユーザーの全提出数は多くても10,000件程度かつ、提出URLなどしか持たないのでメモリに乗る
@@ -89,7 +107,7 @@ FETCH_LOOP:
 
 		resp, err := httpClient.Do(req)
 		if err != nil {
-			return nil, errors.Wrap(err, "failed to send request")
+			return nil, errors.Wrap(err, "infra.fetchAtcoderSubmissionAPIResponseList() : failed to send request")
 		}
 		defer resp.Body.Close()
 
@@ -100,7 +118,7 @@ FETCH_LOOP:
 				return nil, errors.Wrap(err, "failed to read response body")
 			}
 
-			var responseList []AtcoderSubmissionAPIResponse
+			var responseList []atcoderSubmissionAPIResponse
 			if err := json.Unmarshal(body, &responseList); err != nil {
 				return nil, errors.Wrap(err, fmt.Sprintf("failed to unmarshal response body: %v", string(body)))
 			}
@@ -128,7 +146,7 @@ FETCH_LOOP:
 }
 
 // AtCoder Problems APIから返ってくる提出のレスポンス
-type AtcoderSubmissionAPIResponse struct {
+type atcoderSubmissionAPIResponse struct {
 	ID            int64   `json:"id"`
 	EpochSecond   int64   `json:"epoch_second"`
 	ProblemID     string  `json:"problem_id"`
@@ -141,7 +159,7 @@ type AtcoderSubmissionAPIResponse struct {
 	ExecutionTime int64   `json:"execution_time"`
 }
 
-func (ac atcoderCrawlerImpl) convertToSubmission(ctx context.Context, res AtcoderSubmissionAPIResponse) (*model.Submission, error) {
+func (ac atcoderCrawlerImpl) convertToSubmission(ctx context.Context, res atcoderSubmissionAPIResponse) (*model.Submission, error) {
 	url, err := model.NewAtcoderSubmissionURL(res.ContestID, fmt.Sprint(res.ID))
 	if err != nil {
 		return nil, err
