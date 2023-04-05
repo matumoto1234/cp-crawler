@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/gocolly/colly"
-	"github.com/gocolly/colly/debug"
 	"github.com/matumoto1234/cp-crawler/controller"
 	"github.com/matumoto1234/cp-crawler/domain/repository"
 	"github.com/matumoto1234/cp-crawler/infra"
@@ -51,12 +50,11 @@ func main() {
 
 	var ac repository.Crawler = atcoder.NewAtcoderCrawler(client, r)
 
-	collector := colly.NewCollector(
-		colly.Debugger(&debug.LogDebugger{}),
-	)
+	collector := colly.NewCollector()
 
 	collector.Limit(&colly.LimitRule{
-		Delay: 5 * time.Second,
+		DomainGlob:  "*atcoder.jp*",
+		RandomDelay: 5 * time.Second,
 	})
 
 	g, err := db.NewGit()

@@ -2,7 +2,9 @@ package atcoder
 
 import (
 	"context"
+	"log"
 	"net/url"
+	"os"
 
 	"github.com/gocolly/colly"
 	"github.com/matumoto1234/cp-crawler/domain/service"
@@ -22,6 +24,11 @@ func (s scraperImpl) SourceCode(ctx context.Context, submissionURL *url.URL) (st
 	if err := s.collector.Visit(submissionURL.String()); err != nil {
 		return "", errors.WithStack(err)
 	}
+
+	s.collector.Wait()
+
+	logInfo := log.New(os.Stdout, "[INFO] ", log.LstdFlags)
+	logInfo.Println("scraped : ", submissionURL.String())
 
 	return sourceCode, nil
 }
