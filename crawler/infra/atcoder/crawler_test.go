@@ -1,10 +1,11 @@
-package infra_test
+package atcoder
 
 import (
 	"context"
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -22,25 +23,25 @@ func Test_AtcoderCrawler_Do(t *testing.T) {
 
 	t.Parallel()
 
-	r, err := recorder.New(".cassette/crawl")
+	r, err := recorder.NewWithOptions(&recorder.Options{
+		CassetteName: filepath.Join(".cassette", "crawl"),
+		Mode:         recorder.ModeReplayWithNewEpisodes,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	defer r.Stop()
 
-	logInfo := log.New(os.Stdout, "[INFO] ", log.Ldate|log.Ltime|log.Lshortfile)
-
-	r.SetRealTransport(infra.NewRateLimitTransport(
-		infra.NewLoggingTransport(
-			http.DefaultTransport,
-			logInfo,
-		),
-		rate.NewLimiter(rate.Every(2*time.Second), 1), // 2秒に1回
-	))
+	r.SetReplayableInteractions(true)
 
 	client := &http.Client{
-		Transport: r,
+		Transport: infra.NewRateLimitTransport(
+			infra.NewLoggingTransport(
+				http.DefaultTransport,
+				log.New(os.Stdout, "[INFO] ", log.Ldate|log.Ltime|log.Lshortfile),
+			),
+			rate.NewLimiter(rate.Every(2*time.Second), 1), // 2秒に1回
+		),
 	}
 
 	const INF = 1 << 30
@@ -93,7 +94,7 @@ func Test_AtcoderCrawler_Do(t *testing.T) {
 			g := goldie.New(t)
 
 			c := repository.Crawler(
-				infra.NewAtcoderCrawler(client),
+				NewAtcoderCrawler(client, r),
 			)
 
 			got, err := c.Do(context.Background(), test.pageSize, test.pageNumber)

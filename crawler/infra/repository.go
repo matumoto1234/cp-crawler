@@ -22,7 +22,7 @@ type Git interface {
 
 type FileSystem interface {
 	FileName(lang, submissionID string) (string, error)
-	Dir(siteID model.Site, problemID string) (string, error)
+	Dir(siteID model.Site, problemID, contestID string) (string, error)
 	WriteFile(dir, fileName string, content []byte) error
 }
 
@@ -30,18 +30,29 @@ type submissionRepositoryImpl struct {
 	g Git
 	f FileSystem
 	s service.Scraper
+	m service.RepositoryManager
 }
 
-func NewSubmissionRepository(g Git, f FileSystem, s service.Scraper) *submissionRepositoryImpl {
+func NewSubmissionRepository(g Git, f FileSystem, s service.Scraper, m service.RepositoryManager) *submissionRepositoryImpl {
 	return &submissionRepositoryImpl{
 		g: g,
 		f: f,
 		s: s,
+		m: m,
 	}
 }
 
 // Save() : 提出情報を保存する
 func (sr submissionRepositoryImpl) Save(ctx context.Context, s *model.Submission) error {
+	exists, err := sr.m.Exists(ctx, s)
+	if err != nil {
+		return err
+	}
+
+	if exists {
+		return nil
+	}
+
 	if err := sr.writeAndCommit(ctx, s); err != nil {
 		return err
 	}
@@ -55,22 +66,36 @@ func (sr submissionRepositoryImpl) Save(ctx context.Context, s *model.Submission
 
 // SaveAll() : 提出情報リストを保存する
 func (sr submissionRepositoryImpl) SaveAll(ctx context.Context, submissionList []*model.Submission) error {
+	saved := false
 	for _, s := range submissionList {
+		exists, err := sr.m.Exists(ctx, s)
+		if err != nil {
+			return err
+		}
+
+		if exists {
+			continue
+		}
+
 		if err := sr.writeAndCommit(ctx, s); err != nil {
 			return err
 		}
+		saved = true
 	}
 
-	if err := sr.g.Push(); err != nil {
-		return err
+	if saved {
+		if err := sr.g.Push(); err != nil {
+			return err
+		}
 	}
 
 	return nil
 }
 
 // writeAndCommit() : 提出情報を保存し、Add, Commitを行う
+// すでに保存済みの提出情報の場合はtrue,nilを返す
 func (sr submissionRepositoryImpl) writeAndCommit(ctx context.Context, s *model.Submission) error {
-	dir, err := sr.f.Dir(s.SiteID, s.ProblemID)
+	dir, err := sr.f.Dir(s.SiteID, s.ProblemID, s.ContestID)
 	if err != nil {
 		return err
 	}
@@ -129,56 +154,55 @@ func header(s *model.Submission) (string, error) {
 
 // commentOut() : 1行のコメントアウトを行う
 func commentOut(lang, line string) (string, error) {
-	type affix struct {
+	commentList := []struct {
+		lang   string
 		prefix string
 		suffix string
+	}{
+		{lang: "Awk", prefix: "#", suffix: ""},
+		{lang: "C#", prefix: "//", suffix: ""},
+		{lang: "C++", prefix: "//", suffix: ""},
+		{lang: "Bash", prefix: "#", suffix: ""},
+		{lang: "Brainfuck", prefix: "#", suffix: ""},
+		{lang: "COBOL", prefix: "*", suffix: ""},
+		{lang: "Clojure", prefix: ";", suffix: ""},
+		{lang: "Lisp", prefix: ";", suffix: ""},
+		{lang: "Crystal", prefix: "#", suffix: ""},
+		{lang: "Fortran", prefix: "*", suffix: ""},
+		{lang: "Go", prefix: "//", suffix: ""},
+		{lang: "Haskell", prefix: "--", suffix: ""},
+		{lang: "JavaScript", prefix: "//", suffix: ""},
+		{lang: "Java", prefix: "//", suffix: ""},
+		{lang: "Julia", prefix: "#", suffix: ""},
+		{lang: "Kotlin", prefix: "//", suffix: ""},
+		{lang: "MoonScript", prefix: "--", suffix: ""},
+		{lang: "Nim", prefix: "#", suffix: ""},
+		{lang: "OCaml", prefix: "*", suffix: "*"},
+		{lang: "Objective", prefix: "//", suffix: ""},
+		{lang: "Octave", prefix: "%{", suffix: "%}"},
+		{lang: "PHP", prefix: "<!--", suffix: "--?"},
+		{lang: "Pascal", prefix: "//", suffix: ""},
+		{lang: "Perl", prefix: "#", suffix: ""},
+		{lang: "Py", prefix: "#", suffix: ""},
+		{lang: "Ruby", prefix: "#", suffix: ""},
+		{lang: "Rust", prefix: "//", suffix: ""},
+		{lang: "Scala", prefix: "//", suffix: ""},
+		{lang: "Scheme", prefix: ";", suffix: ""},
+		{lang: "Sed", prefix: "//", suffix: ""},
+		{lang: "Swift", prefix: "//", suffix: ""},
+		{lang: "Text", prefix: "//", suffix: ""},
+		{lang: "TypeScript", prefix: "//", suffix: ""},
+		{lang: "Unlambda", prefix: "#", suffix: ""},
+		{lang: "Basic", prefix: "'", suffix: ""},
+		{lang: "ML", prefix: "*", suffix: "*"},
+		{lang: "F#", prefix: "//", suffix: ""},
+		{lang: "C", prefix: "//", suffix: ""},
+		{lang: "D", prefix: "//", suffix: ""},
 	}
 
-	langToComment := map[string]affix{
-		"Awk":        {"#", ""},
-		"C#":         {"//", ""},
-		"C++":        {"//", ""},
-		"Bash":       {"#", ""},
-		"Brainfuck":  {"#", ""},
-		"COBOL":      {"*", ""},
-		"Clojure":    {";", ""},
-		"Lisp":       {";", ""},
-		"Crystal":    {"#", ""},
-		"Fortran":    {"*", ""},
-		"Go":         {"//", ""},
-		"Haskell":    {"--", ""},
-		"JavaScript": {"//", ""},
-		"Java":       {"//", ""},
-		"Julia":      {"#", ""},
-		"Kotlin":     {"//", ""},
-		"MoonScript": {"--", ""},
-		"Nim":        {"#", ""},
-		"OCaml":      {"*", "*"},
-		"Objective":  {"//", ""},
-		"Octave":     {"%{", "%}"},
-		"PHP":        {"<!--", "--?"},
-		"Pascal":     {"//", ""},
-		"Perl":       {"#", ""},
-		"Py":         {"#", ""},
-		"Ruby":       {"#", ""},
-		"Rust":       {"//", ""},
-		"Scala":      {"//", ""},
-		"Scheme":     {";", ""},
-		"Sed":        {"//", ""}, // inaccurate
-		"Swift":      {"//", ""},
-		"Text":       {"//", ""}, // inaccurate
-		"TypeScript": {"//", ""},
-		"Unlambda":   {"#", ""},
-		"Basic":      {"'", ""},
-		"ML":         {"*", "*"},
-		"F#":         {"//", ""},
-		"C":          {"//", ""},
-		"D":          {"//", ""},
-	}
-
-	for key, affix := range langToComment {
-		if strings.Contains(lang, key) {
-			return affix.prefix + line + affix.suffix, nil
+	for _, v := range commentList {
+		if strings.Contains(lang, v.lang) {
+			return v.prefix + line + v.suffix, nil
 		}
 	}
 

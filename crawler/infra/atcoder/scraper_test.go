@@ -1,4 +1,4 @@
-package infra_test
+package atcoder
 
 import (
 	"context"
@@ -8,7 +8,6 @@ import (
 
 	"github.com/gocolly/colly"
 	"github.com/gocolly/colly/debug"
-	"github.com/matumoto1234/cp-crawler/infra"
 )
 
 func Test_Scraper_SourceCode(t *testing.T) {
@@ -29,7 +28,7 @@ func Test_Scraper_SourceCode(t *testing.T) {
 
 	u, _ := url.Parse("https://atcoder.jp/contests/abc117/submissions/4156454")
 
-	s := infra.NewScraper(c)
+	s := NewScraper(c)
 	code, err := s.SourceCode(context.Background(), u)
 	if err != nil {
 		t.Fatal(err)

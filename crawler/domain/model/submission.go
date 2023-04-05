@@ -14,6 +14,7 @@ type Submission struct {
 	SiteID        Site
 	ProblemID     string
 	SubmissionID  string
+	ContestID     string
 	Status        judge.Status
 	Language      string
 	SubmittedAt   time.Time
@@ -24,6 +25,7 @@ func NewSubmission(
 	siteID Site,
 	problemID string,
 	submissionID string,
+	contestID string,
 	status judge.Status,
 	language string,
 	submittedAt time.Time,
@@ -33,6 +35,7 @@ func NewSubmission(
 		SiteID:        siteID,
 		ProblemID:     problemID,
 		SubmissionID:  submissionID,
+		ContestID:     contestID,
 		Status:        status,
 		Language:      language,
 		SubmittedAt:   submittedAt,

@@ -13,28 +13,28 @@ type rateLimitTransport struct {
 	rateLimiter *rate.Limiter
 }
 
-func (rlt *rateLimitTransport) transport() http.RoundTripper {
-	if rlt.Transport == nil {
+func (t *rateLimitTransport) transport() http.RoundTripper {
+	if t.Transport == nil {
 		return http.DefaultTransport
 	}
-	return rlt.Transport
+	return t.Transport
 }
 
-func (rlt *rateLimitTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	res, err := rlt.transport().RoundTrip(req)
+func (t *rateLimitTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	res, err := t.transport().RoundTrip(req)
 
-	if err := rlt.rateLimiter.Wait(req.Context()); err != nil {
+	if err := t.rateLimiter.Wait(req.Context()); err != nil {
 		return nil, err
 	}
 
 	return res, err
 }
 
-func (rlt *rateLimitTransport) CancelRequest(req *http.Request) {
+func (t *rateLimitTransport) CancelRequest(req *http.Request) {
 	type cancelableTransport interface {
 		CancelRequest(*http.Request)
 	}
-	if cr, ok := rlt.transport().(cancelableTransport); ok {
+	if cr, ok := t.transport().(cancelableTransport); ok {
 		cr.CancelRequest(req)
 	}
 }
@@ -52,26 +52,26 @@ type loggingTransport struct {
 	logger    *log.Logger
 }
 
-func (lt *loggingTransport) transport() http.RoundTripper {
-	if lt.Transport == nil {
+func (t *loggingTransport) transport() http.RoundTripper {
+	if t.Transport == nil {
 		return http.DefaultTransport
 	}
-	return lt.Transport
+	return t.Transport
 }
 
-func (lt *loggingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	res, err := lt.transport().RoundTrip(req)
+func (t *loggingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	res, err := t.transport().RoundTrip(req)
 
-	lt.logger.Println(req.Method, req.URL, res.StatusCode)
+	t.logger.Println(req.Method, req.URL, res.StatusCode)
 
 	return res, err
 }
 
-func (lt *loggingTransport) CancelRequest(req *http.Request) {
+func (t *loggingTransport) CancelRequest(req *http.Request) {
 	type cancelableTransport interface {
 		CancelRequest(*http.Request)
 	}
-	if cr, ok := lt.transport().(cancelableTransport); ok {
+	if cr, ok := t.transport().(cancelableTransport); ok {
 		cr.CancelRequest(req)
 	}
 }

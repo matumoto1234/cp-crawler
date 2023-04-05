@@ -15,11 +15,14 @@ type atcoderUseCaseImpl struct {
 	sr repository.SubmissionRepository
 }
 
-func (a atcoderUseCaseImpl) CrawlAndSave(ctx context.Context) error {
-	ceilDiv := func(a, b int) int {
-		return (a + b - 1) / b
+func NewAtcoderUseCase(crawler repository.Crawler, submissionRepo repository.SubmissionRepository) AtcoderUseCase {
+	return &atcoderUseCaseImpl{
+		c:  crawler,
+		sr: submissionRepo,
 	}
+}
 
+func (a atcoderUseCaseImpl) CrawlAndSave(ctx context.Context) error {
 	var pageNumber int
 	for {
 		// AtCoderに提出できるソースコード長が最大で512Kib
@@ -32,6 +35,8 @@ func (a atcoderUseCaseImpl) CrawlAndSave(ctx context.Context) error {
 		}
 
 		// pageNumber == ceilDiv(page.Paging.TotalCount, 50)のときは最後のページ
+		// TODO: hoge.IsLast(pageNumber)みたいな関数で判定したい
+		//       usecaseにあるビジネスロジックとしてceilDivを使うのはふさわしくないため
 		if pageNumber == ceilDiv(page.Paging.TotalCount, pageSize) {
 			break
 		}
@@ -46,9 +51,6 @@ func (a atcoderUseCaseImpl) CrawlAndSave(ctx context.Context) error {
 	return nil
 }
 
-func NewAtcoderUseCase(crawler repository.Crawler, submissionRepo repository.SubmissionRepository) AtcoderUseCase {
-	return &atcoderUseCaseImpl{
-		c:  crawler,
-		sr: submissionRepo,
-	}
+func ceilDiv(a, b int) int {
+	return (a + b - 1) / b
 }

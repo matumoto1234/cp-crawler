@@ -4,16 +4,19 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/gocolly/colly"
 	"github.com/gocolly/colly/debug"
 	"github.com/matumoto1234/cp-crawler/controller"
-	domain "github.com/matumoto1234/cp-crawler/domain/repository"
+	"github.com/matumoto1234/cp-crawler/domain/repository"
 	"github.com/matumoto1234/cp-crawler/infra"
+	"github.com/matumoto1234/cp-crawler/infra/atcoder"
 	"github.com/matumoto1234/cp-crawler/infra/db"
 	"github.com/matumoto1234/cp-crawler/usecase"
 	"golang.org/x/time/rate"
+	"gopkg.in/dnaeon/go-vcr.v3/recorder"
 )
 
 func main() {
@@ -23,10 +26,7 @@ func main() {
 	logInfo.Println("cp-crawler started.")
 
 	lt := infra.NewLoggingTransport(
-		infra.NewRateLimitTransport(
-			http.DefaultTransport,
-			rate.NewLimiter(rate.Every(2*time.Second), 1), // 1 request every 2 seconds
-		),
+		http.DefaultTransport,
 		logInfo,
 	)
 
@@ -35,27 +35,40 @@ func main() {
 		rate.NewLimiter(rate.Every(2*time.Second), 1), // 1 request every 2 seconds
 	)
 
+	r, err := recorder.NewWithOptions(&recorder.Options{
+		CassetteName: filepath.Join(".cassette", "crawl"),
+		Mode:         recorder.ModeReplayWithNewEpisodes,
+	})
+	if err != nil {
+		logError.Fatalf("%+v\n", err)
+	}
+
+	r.SetReplayableInteractions(true)
+
 	client := &http.Client{
 		Transport: rlt,
 	}
 
-	var ac domain.Crawler
-	ac = infra.NewAtcoderCrawler(client)
+	var ac repository.Crawler = atcoder.NewAtcoderCrawler(client, r)
 
 	collector := colly.NewCollector(
 		colly.Debugger(&debug.LogDebugger{}),
 	)
 
 	collector.Limit(&colly.LimitRule{
-		Parallelism: 2,
-		RandomDelay: 5 * time.Second,
+		Delay: 5 * time.Second,
 	})
 
-	var sr domain.SubmissionRepository
-	sr = infra.NewSubmissionRepository(db.NewGit(), db.NewFileSystem(), infra.NewScraper(collector))
+	g, err := db.NewGit()
+	if err != nil {
+		logError.Printf("%+v\n", err)
+	}
 
-	var au usecase.AtcoderUseCase
-	au = usecase.NewAtcoderUseCase(ac, sr)
+	f := db.NewFileSystem()
+
+	var sr repository.SubmissionRepository = infra.NewSubmissionRepository(g, f, atcoder.NewScraper(collector), infra.NewRepositoryManager(f))
+
+	var au usecase.AtcoderUseCase = usecase.NewAtcoderUseCase(ac, sr)
 
 	c := controller.NewController(au)
 

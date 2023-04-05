@@ -13,13 +13,15 @@ import (
 type gitImpl struct {
 }
 
-func NewGit() *gitImpl {
-	initConfig()
-	return &gitImpl{}
+func NewGit() (*gitImpl, error) {
+	if err := initConfig(); err != nil {
+		return nil, err
+	}
+	return &gitImpl{}, nil
 }
 
 func (g gitImpl) Add(path string) error {
-	if err := execute("git", "add", path); err != nil {
+	if err := execute("add", path); err != nil {
 		return err
 	}
 
@@ -29,7 +31,7 @@ func (g gitImpl) Add(path string) error {
 func (g gitImpl) Commit(commitMsg string, dateTime time.Time) error {
 	dateMsg := fmt.Sprintf("--date=\"%v\"", dateTime.String())
 
-	if err := execute("git", "commit", "-m", commitMsg, dateMsg); err != nil {
+	if err := execute("commit", "-m", commitMsg, dateMsg); err != nil {
 		return err
 	}
 
@@ -37,7 +39,7 @@ func (g gitImpl) Commit(commitMsg string, dateTime time.Time) error {
 }
 
 func (g gitImpl) Push() error {
-	if err := execute("git", "push", "origin", "HEAD"); err != nil {
+	if err := execute("push", "origin", "HEAD"); err != nil {
 		return err
 	}
 
@@ -49,17 +51,17 @@ var once sync.Once
 func initConfig() error {
 	var initErr error
 	once.Do(func() {
-		if err := execute("git", "config", "user.name", variable.GitUserName); err != nil {
+		if err := execute("config", "user.name", variable.GitUserName); err != nil {
 			initErr = err
 			return
 		}
 
-		if err := execute("git", "config", "user.email", variable.GitEMail); err != nil {
+		if err := execute("config", "user.email", variable.GitEMail); err != nil {
 			initErr = err
 			return
 		}
 
-		if err := execute("git", "remote", "set-url", "origin", variable.GitRemoteURL); err != nil {
+		if err := execute("remote", "set-url", "origin", variable.GitRemoteURL); err != nil {
 			initErr = err
 			return
 		}
@@ -68,11 +70,11 @@ func initConfig() error {
 }
 
 func execute(arg ...string) error {
-	cmd := exec.Command("", arg...)
+	cmd := exec.Command("git", arg...)
 
 	stdoutStderr, err := cmd.CombinedOutput()
 	if err != nil {
-		return errors.New(fmt.Sprintf("failed running the command %v\n command stdout and stderr output : %v\n", arg, stdoutStderr))
+		return errors.New(fmt.Sprintf("failed running the command %v\n command stdout and stderr output : %s\n", arg, string(stdoutStderr)))
 	}
 
 	return nil

@@ -8,14 +8,14 @@ type MockGit struct {
 	FakePush   func() error
 }
 
-func (m MockGit) Add(path string) error {
+func (m *MockGit) Add(path string) error {
 	return m.FakeAdd(path)
 }
 
-func (m MockGit) Commit(commitMsg string, dateTime time.Time) error {
+func (m *MockGit) Commit(commitMsg string, dateTime time.Time) error {
 	return m.FakeCommit(commitMsg, dateTime)
 }
 
-func (m MockGit) Push() error {
+func (m *MockGit) Push() error {
 	return m.FakePush()
 }

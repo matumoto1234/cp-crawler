@@ -1,4 +1,4 @@
-package infra
+package atcoder
 
 import (
 	"context"
@@ -7,6 +7,8 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -14,17 +16,21 @@ import (
 	"github.com/matumoto1234/cp-crawler/domain/model/judge"
 	variable "github.com/matumoto1234/cp-crawler/domain/variable"
 	"github.com/pkg/errors"
+	"gopkg.in/dnaeon/go-vcr.v3/cassette"
+	"gopkg.in/dnaeon/go-vcr.v3/recorder"
 )
 
 type atcoderCrawlerImpl struct {
 	client       *http.Client
+	r            *recorder.Recorder
 	once         sync.Once
 	responseList []atcoderSubmissionAPIResponse
 }
 
-func NewAtcoderCrawler(client *http.Client) *atcoderCrawlerImpl {
+func NewAtcoderCrawler(client *http.Client, r *recorder.Recorder) *atcoderCrawlerImpl {
 	return &atcoderCrawlerImpl{
 		client: client,
+		r:      r,
 	}
 }
 
@@ -32,9 +38,11 @@ func NewAtcoderCrawler(client *http.Client) *atcoderCrawlerImpl {
 // - 1ページあたりの大きさはpageSize
 func (ac atcoderCrawlerImpl) Do(ctx context.Context, pageSize, pageNumber int) (*model.Page[*model.Submission], error) {
 	var err error
+
 	ac.once.Do(func() {
-		ac.responseList, err = fetchAtcoderSubmissionAPIResponseList(ctx, ac.client)
+		ac.responseList, err = ac.fetchAtcoderSubmissionAPIResponseList(ctx)
 	})
+
 	if err != nil {
 		return nil, err
 	}
@@ -88,7 +96,7 @@ func (ac atcoderCrawlerImpl) Do(ctx context.Context, pageSize, pageNumber int) (
 	), nil
 }
 
-func fetchAtcoderSubmissionAPIResponseList(ctx context.Context, httpClient *http.Client) ([]atcoderSubmissionAPIResponse, error) {
+func (ac atcoderCrawlerImpl) fetchAtcoderSubmissionAPIResponseList(ctx context.Context) ([]atcoderSubmissionAPIResponse, error) {
 	u, err := url.Parse("https://kenkoooo.com/atcoder/atcoder-api/v3/user/submissions")
 	if err != nil {
 		return nil, errors.WithStack(err)
@@ -99,55 +107,98 @@ func fetchAtcoderSubmissionAPIResponseList(ctx context.Context, httpClient *http
 	q.Set("from_second", "0")
 	u.RawQuery = q.Encode()
 
-	allResponseList := make([]atcoderSubmissionAPIResponse, 0)
+	ac.r.SetRealTransport(ac.client.Transport)
+	ac.client.Transport = ac.r
 
 	// ページネーションされているレスポンスをすべて取得する
 	// 1ユーザーの全提出数は多くても10,000件程度かつ、提出URLなどしか持たないのでメモリに乗る
-FETCH_LOOP:
+	allResponseList := make([]atcoderSubmissionAPIResponse, 0)
+
 	for {
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
+		respList, err := ac.fetch(ctx, u)
 		if err != nil {
-			return nil, errors.Wrap(err, fmt.Sprintf("failed to create request. url : %s", u.String()))
+			return nil, err
 		}
 
-		resp, err := httpClient.Do(req)
-		if err != nil {
-			return nil, errors.Wrap(err, fmt.Sprintf("failed to send request. url : %s", u.String()))
+		if len(respList) == 0 {
+			break
 		}
-		defer resp.Body.Close()
 
-		switch resp.StatusCode {
-		case http.StatusOK:
-			body, err := io.ReadAll(resp.Body)
-			if err != nil {
-				return nil, errors.Wrap(err, "failed to read response body")
-			}
+		allResponseList = append(allResponseList, respList...)
 
-			var responseList []atcoderSubmissionAPIResponse
-			if err := json.Unmarshal(body, &responseList); err != nil {
-				return nil, errors.Wrap(err, fmt.Sprintf("failed to unmarshal response body: %v", string(body)))
-			}
-
-			if len(responseList) == 0 {
-				break FETCH_LOOP
-			}
-
-			allResponseList = append(allResponseList, responseList...)
-
-			// 取得した中で最新の提出時刻+1を次のリクエストで利用する
-			newSecond := responseList[len(responseList)-1].EpochSecond + 1
-			q := u.Query()
-			q.Set("from_second", fmt.Sprint(newSecond))
-			u.RawQuery = q.Encode()
-		case http.StatusBadRequest:
-			return nil, errors.New(fmt.Sprintf("bad request. URL: %s", u.String()))
-		case http.StatusNotFound:
-			return nil, errors.New(fmt.Sprintf("not found. URL: %s", u.String()))
-		default:
-			return nil, errors.New(fmt.Sprintf("unexpected status code: %d, URL: %s", resp.StatusCode, u.String()))
-		}
+		// 取得した中で最新の提出時刻+1を次のリクエストで利用する
+		newSecond := respList[len(respList)-1].EpochSecond + 1
+		q := u.Query()
+		q.Set("from_second", fmt.Sprint(newSecond))
+		u.RawQuery = q.Encode()
 	}
+
+	ac.r.Stop()
+
+	// カセット処理
+	cassetteName := filepath.Join(".cassette", "crawl")
+	c, err := cassette.Load(cassetteName)
+	if err != nil {
+		dir, _ := os.Getwd()
+		return nil, errors.Wrap(err, "failed to load cassette. working directory : "+dir)
+	}
+
+	if len(c.Interactions) >= 2 {
+		i := c.Interactions[len(c.Interactions)-2]
+		c.Interactions = c.Interactions[:len(c.Interactions)-2]
+
+		if err := c.Save(); err != nil {
+			return nil, errors.WithStack(err)
+		}
+
+		req, err := i.GetHTTPRequest()
+		if err != nil {
+			return nil, errors.WithStack(err)
+		}
+
+		respList, err := ac.fetch(ctx, req.URL)
+		if err != nil {
+			return nil, err
+		}
+
+		allResponseList = append(allResponseList, respList...)
+	}
+
 	return allResponseList, nil
+}
+
+func (ac atcoderCrawlerImpl) fetch(ctx context.Context, u *url.URL) ([]atcoderSubmissionAPIResponse, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
+	if err != nil {
+		return nil, errors.Wrap(err, fmt.Sprintf("failed to create request. url : %s", u.String()))
+	}
+
+	resp, err := ac.client.Do(req)
+	if err != nil {
+		return nil, errors.Wrap(err, fmt.Sprintf("failed to send request. url : %s", u.String()))
+	}
+	defer resp.Body.Close()
+
+	switch resp.StatusCode {
+	case http.StatusOK:
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to read response body")
+		}
+
+		var responseList []atcoderSubmissionAPIResponse
+		if err := json.Unmarshal(body, &responseList); err != nil {
+			return nil, errors.Wrap(err, fmt.Sprintf("failed to unmarshal response body: %v", string(body)))
+		}
+
+		return responseList, nil
+	case http.StatusBadRequest:
+		return nil, errors.New(fmt.Sprintf("bad request. URL: %s", u.String()))
+	case http.StatusNotFound:
+		return nil, errors.New(fmt.Sprintf("not found. URL: %s", u.String()))
+	default:
+		return nil, errors.New(fmt.Sprintf("unexpected status code: %d, URL: %s", resp.StatusCode, u.String()))
+	}
 }
 
 // AtCoder Problems APIから返ってくる提出のレスポンス
@@ -199,6 +250,7 @@ func (ac atcoderCrawlerImpl) convertToSubmission(ctx context.Context, res atcode
 		model.SiteAtcoder,
 		res.ProblemID,
 		fmt.Sprint(res.ID),
+		res.ContestID,
 		toJudgeStatus(res.Result),
 		res.Language,
 		time.Unix(res.EpochSecond, 0),

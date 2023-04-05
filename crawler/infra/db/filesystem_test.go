@@ -14,14 +14,16 @@ func Test_FileSystem_Dir(t *testing.T) {
 		name      string
 		site      model.Site
 		problemID string
+		contestID string
 		want      string
 		wantErr   bool
 	}{
 		{
 			name:      "AtCoder",
 			site:      model.SiteAtcoder,
-			problemID: "abc001",
-			want:      "../AtCoder/abc001",
+			problemID: "abc001_a",
+			contestID: "abc001",
+			want:      "../AtCoder/abc001/abc001_a",
 			wantErr:   false,
 		},
 	}
@@ -34,7 +36,7 @@ func Test_FileSystem_Dir(t *testing.T) {
 
 			f := db.NewFileSystem()
 
-			got, err := f.Dir(test.site, test.problemID)
+			got, err := f.Dir(test.site, test.problemID, test.contestID)
 			if (err != nil) != test.wantErr {
 				t.Fatalf("Dir() error = %v, wantErr %v", err, test.wantErr)
 			}
