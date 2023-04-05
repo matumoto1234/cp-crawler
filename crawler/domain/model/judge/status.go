@@ -1,24 +1,24 @@
-package domain
+package judge
 
 // Value object
-type JudgeStatus int
+type Status string
 
 const (
-	CompilationError JudgeStatus = iota
-	MemoryLimitExceeded
-	TimeLimitExceeded
-	RuntimeError
-	OutputLimitExceeded
-	InternalError
-	WrongAnswer
-	PresentationError
-	Accepted
-	WaitingForJudging
-	WaitingForRejudging
-	JudgeNotAvailable
+	CompilationError    Status = "CE"
+	MemoryLimitExceeded Status = "MLE"
+	TimeLimitExceeded   Status = "TLE"
+	RuntimeError        Status = "RE"
+	OutputLimitExceeded Status = "OLE"
+	InternalError       Status = "IE"
+	WrongAnswer         Status = "WA"
+	PresentationError   Status = "PE"
+	Accepted            Status = "AC"
+	WaitingForJudging   Status = "WJ"
+	WaitingForRejudging Status = "WR"
+	JudgeNotAvailable   Status = "JNA"
 )
 
-func (j JudgeStatus) String() string {
+func (j Status) String() string {
 	switch j {
 	case CompilationError:
 		return "CompilationError"

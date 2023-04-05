@@ -1,4 +1,4 @@
-package domain
+package model
 
 // Value object
 type Page[T any] struct {

@@ -1,33 +1,33 @@
-package domain
+package model
 
 import (
 	"net/url"
 	"time"
 
+	"github.com/matumoto1234/cp-crawler/domain/model/judge"
 	"github.com/pkg/errors"
 )
 
 // Entity
+// ソースコードはパフォーマンスの都合上持たせず、必要なときにスクレイピングして取得する
 type Submission struct {
 	SiteID        Site
 	ProblemID     string
 	SubmissionID  string
-	Status        JudgeStatus
+	Status        judge.Status
 	Language      string
 	SubmittedAt   time.Time
 	SubmissionURL *url.URL
-	SourceCode    string
 }
 
 func NewSubmission(
 	siteID Site,
 	problemID string,
 	submissionID string,
-	status JudgeStatus,
+	status judge.Status,
 	language string,
 	submittedAt time.Time,
 	submissionURL *url.URL,
-	sourceCode string,
 ) *Submission {
 	return &Submission{
 		SiteID:        siteID,
@@ -37,7 +37,6 @@ func NewSubmission(
 		Language:      language,
 		SubmittedAt:   submittedAt,
 		SubmissionURL: submissionURL,
-		SourceCode:    sourceCode,
 	}
 }
 

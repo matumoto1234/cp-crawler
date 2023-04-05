@@ -10,36 +10,35 @@ import (
 	"github.com/pkg/errors"
 )
 
-// infra内でのGit処理を独立させた構造体
-type Git struct {
+type gitImpl struct {
 }
 
-func NewGit() *Git {
+func NewGit() *gitImpl {
 	initConfig()
-	return &Git{}
+	return &gitImpl{}
 }
 
-func (g Git) Add(filePath string) error {
-	if err := execute("git", "add", filePath); err != nil {
-		return errors.WithStack(err)
+func (g gitImpl) Add(path string) error {
+	if err := execute("git", "add", path); err != nil {
+		return err
 	}
 
 	return nil
 }
 
-func (g Git) Commit(commitMsg string, dateTime time.Time) error {
+func (g gitImpl) Commit(commitMsg string, dateTime time.Time) error {
 	dateMsg := fmt.Sprintf("--date=\"%v\"", dateTime.String())
 
 	if err := execute("git", "commit", "-m", commitMsg, dateMsg); err != nil {
-		return errors.WithStack(err)
+		return err
 	}
 
 	return nil
 }
 
-func (g Git) Push() error {
+func (g gitImpl) Push() error {
 	if err := execute("git", "push", "origin", "HEAD"); err != nil {
-		return errors.WithStack(err)
+		return err
 	}
 
 	return nil
@@ -64,20 +63,16 @@ func initConfig() error {
 			initErr = err
 			return
 		}
-
-		if err := execute("git", "switch", "main"); err != nil {
-			initErr = err
-			return
-		}
 	})
 	return errors.WithStack(initErr)
 }
 
 func execute(arg ...string) error {
-	err := exec.Command("", arg...).Run()
+	cmd := exec.Command("", arg...)
 
+	stdoutStderr, err := cmd.CombinedOutput()
 	if err != nil {
-		return errors.New(fmt.Sprintf("failed running the command %v\n", arg))
+		return errors.New(fmt.Sprintf("failed running the command %v\n command stdout and stderr output : %v\n", arg, stdoutStderr))
 	}
 
 	return nil

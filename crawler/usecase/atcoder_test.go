@@ -7,91 +7,83 @@ import (
 
 	model "github.com/matumoto1234/cp-crawler/domain/model"
 	"github.com/matumoto1234/cp-crawler/usecase"
+	"github.com/matumoto1234/cp-crawler/usecase/mock"
 )
-
-type mockCrawler struct {
-	fakeDo func(ctx context.Context, pageSize, pageNumber int) (*model.Page[*model.Submission], error)
-}
-
-func (m mockCrawler) Do(ctx context.Context, pageSize, pageNumber int) (*model.Page[*model.Submission], error) {
-	return m.fakeDo(ctx, pageSize, pageNumber)
-}
-
-type mockSubmissionRepository struct {
-	fakeSave func(ctx context.Context, submission *model.Submission) error
-}
-
-func (m mockSubmissionRepository) Save(ctx context.Context, submission *model.Submission) error {
-	return m.fakeSave(ctx, submission)
-}
 
 func Test_AtcoderUseCase_CrawlAndSave(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
 		name    string
-		c       *mockCrawler
-		sr      *mockSubmissionRepository
+		c       *mock.MockCrawler
+		sr      *mock.MockSubmissionRepository
 		wantErr bool
 	}{
 		{
 			name: "正常な動作",
-			c: &mockCrawler{
-				fakeDo: func(ctx context.Context, pageSize, pageNumber int) (*model.Page[*model.Submission], error) {
+			c: &mock.MockCrawler{
+				FakeDo: func(ctx context.Context, pageSize, pageNumber int) (*model.Page[*model.Submission], error) {
 					return model.NewPage(
 						[]*model.Submission{
 							{
 								SubmissionID: "submissionID",
 								ProblemID:    "problemID",
 								Language:     "language",
-								SourceCode:   "source code",
 							},
 						},
 						model.NewPaging(1, 1),
 					), nil
 				},
 			},
-			sr: &mockSubmissionRepository{
-				fakeSave: func(ctx context.Context, submission *model.Submission) error {
+			sr: &mock.MockSubmissionRepository{
+				FakeSave: func(ctx context.Context, submission *model.Submission) error {
+					return nil
+				},
+				FakeSaveAll: func(ctx context.Context, submissionList []*model.Submission) error {
 					return nil
 				},
 			},
 			wantErr: false,
 		},
 		{
-			name: "Crawlerによるエラーが発生する",
-			c: &mockCrawler{
-				fakeDo: func(ctx context.Context, pageSize, pageNumber int) (*model.Page[*model.Submission], error) {
+			name: "Crawler.Do()によるエラーが発生する",
+			c: &mock.MockCrawler{
+				FakeDo: func(ctx context.Context, pageSize, pageNumber int) (*model.Page[*model.Submission], error) {
 					return nil, errors.New("crawler error")
 				},
 			},
-			sr: &mockSubmissionRepository{
-				fakeSave: func(ctx context.Context, submission *model.Submission) error {
+			sr: &mock.MockSubmissionRepository{
+				FakeSave: func(ctx context.Context, submission *model.Submission) error {
+					return nil
+				},
+				FakeSaveAll: func(ctx context.Context, submissionList []*model.Submission) error {
 					return nil
 				},
 			},
 			wantErr: true,
 		},
 		{
-			name: "SubmissionRepositoryによるエラーが発生する",
-			c: &mockCrawler{
-				fakeDo: func(ctx context.Context, pageSize, pageNumber int) (*model.Page[*model.Submission], error) {
+			name: "SubmissionRepository.SaveAll()によるエラーが発生する",
+			c: &mock.MockCrawler{
+				FakeDo: func(ctx context.Context, pageSize, pageNumber int) (*model.Page[*model.Submission], error) {
 					return model.NewPage(
 						[]*model.Submission{
 							{
 								SubmissionID: "submissionID",
 								ProblemID:    "problemID",
 								Language:     "language",
-								SourceCode:   "source code",
 							},
 						},
 						model.NewPaging(1, 1),
 					), nil
 				},
 			},
-			sr: &mockSubmissionRepository{
-				fakeSave: func(ctx context.Context, submission *model.Submission) error {
-					return errors.New("submission repository error")
+			sr: &mock.MockSubmissionRepository{
+				FakeSave: func(ctx context.Context, submission *model.Submission) error {
+					return nil
+				},
+				FakeSaveAll: func(ctx context.Context, submissionList []*model.Submission) error {
+					return errors.New("something happened")
 				},
 			},
 			wantErr: true,

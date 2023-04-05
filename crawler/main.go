@@ -22,9 +22,28 @@ func main() {
 
 	logInfo.Println("cp-crawler started.")
 
+	lt := infra.NewLoggingTransport(
+		infra.NewRateLimitTransport(
+			http.DefaultTransport,
+			rate.NewLimiter(rate.Every(2*time.Second), 1), // 1 request every 2 seconds
+		),
+		logInfo,
+	)
+
+	rlt := infra.NewRateLimitTransport(
+		lt,
+		rate.NewLimiter(rate.Every(2*time.Second), 1), // 1 request every 2 seconds
+	)
+
+	client := &http.Client{
+		Transport: rlt,
+	}
+
+	var ac domain.Crawler
+	ac = infra.NewAtcoderCrawler(client)
+
 	collector := colly.NewCollector(
 		colly.Debugger(&debug.LogDebugger{}),
-		colly.Async(true),
 	)
 
 	collector.Limit(&colly.LimitRule{
@@ -32,26 +51,15 @@ func main() {
 		RandomDelay: 5 * time.Second,
 	})
 
-	var ac domain.Crawler
-	ac = infra.NewAtcoderCrawler(
-		&http.Client{
-			Transport: infra.NewRateLimitTransport(
-				http.DefaultTransport,
-				rate.NewLimiter(rate.Every(2*time.Second), 1), // 1 request every 2 seconds
-			),
-		},
-		infra.NewScraper(collector),
-	)
-
 	var sr domain.SubmissionRepository
-	sr = infra.NewSubmissionRepository(db.NewGit(), db.NewWriter())
+	sr = infra.NewSubmissionRepository(db.NewGit(), db.NewFileSystem(), infra.NewScraper(collector))
 
 	var au usecase.AtcoderUseCase
 	au = usecase.NewAtcoderUseCase(ac, sr)
 
 	c := controller.NewController(au)
 
-	if err := c.CrawlAndSave(); err != nil {
+	if err := c.Do(); err != nil {
 		logError.Printf("%+v\n", err)
 	}
 

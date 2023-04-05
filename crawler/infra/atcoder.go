@@ -7,35 +7,44 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"sync"
 	"time"
 
 	model "github.com/matumoto1234/cp-crawler/domain/model"
+	"github.com/matumoto1234/cp-crawler/domain/model/judge"
 	variable "github.com/matumoto1234/cp-crawler/domain/variable"
 	"github.com/pkg/errors"
 )
 
 type atcoderCrawlerImpl struct {
-	client  *http.Client
-	scraper Scraper
+	client       *http.Client
+	once         sync.Once
+	responseList []atcoderSubmissionAPIResponse
 }
 
-func NewAtcoderCrawler(client *http.Client, s Scraper) *atcoderCrawlerImpl {
+func NewAtcoderCrawler(client *http.Client) *atcoderCrawlerImpl {
 	return &atcoderCrawlerImpl{
-		client:  client,
-		scraper: s,
+		client: client,
 	}
 }
 
 // Do() : 提出一覧を取得し、その後pageNumber番目の提出情報を返す
 // - 1ページあたりの大きさはpageSize
 func (ac atcoderCrawlerImpl) Do(ctx context.Context, pageSize, pageNumber int) (*model.Page[*model.Submission], error) {
-	responseList, err := fetchAtcoderSubmissionAPIResponseList(ctx, ac.client)
+	var err error
+	ac.once.Do(func() {
+		ac.responseList, err = fetchAtcoderSubmissionAPIResponseList(ctx, ac.client)
+	})
 	if err != nil {
 		return nil, err
 	}
 
-	max := func(a, b int) int {
-		if a > b {
+	if len(ac.responseList) == 0 {
+		return nil, errors.New("no submission")
+	}
+
+	min := func(a, b int) int {
+		if a < b {
 			return a
 		}
 		return b
@@ -46,36 +55,32 @@ func (ac atcoderCrawlerImpl) Do(ctx context.Context, pageSize, pageNumber int) (
 	}
 
 	// 大きすぎるページサイズを調整
-	pageSize = max(pageSize, len(responseList))
+	pageSize = min(pageSize, len(ac.responseList))
 
 	left := pageNumber * pageSize
-	left = max(left, len(responseList))
+	left = min(left, len(ac.responseList))
 
 	right := (pageNumber + 1) * pageSize
-	right = max(right, len(responseList))
+	right = min(right, len(ac.responseList))
 
-	isInside := func(index int) bool {
-		return 0 <= index && index <= len(responseList)
+	if left < 0 || right < 0 {
+		return nil, errors.New(fmt.Sprintf("invalid page number. page number : %d, page size : %d", pageNumber, pageSize))
 	}
 
-	if !isInside(left) || !isInside(right) {
-		return nil, errors.New("invalid page number")
-	}
+	totalCount := len(ac.responseList)
 
 	// pageNumberによる指定ページのトリミング
-	responseList = responseList[left:right]
+	ac.responseList = ac.responseList[left:right]
 
 	// 該当ページをドメインモデルに変換
-	submissionList := make([]*model.Submission, len(responseList))
-	for i, resp := range responseList {
+	submissionList := make([]*model.Submission, len(ac.responseList))
+	for i, resp := range ac.responseList {
 		s, err := ac.convertToSubmission(ctx, resp)
 		if err != nil {
 			return nil, err
 		}
 		submissionList[i] = s
 	}
-
-	totalCount := len(responseList)
 
 	return model.NewPage(
 		submissionList,
@@ -102,12 +107,12 @@ FETCH_LOOP:
 	for {
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 		if err != nil {
-			return nil, errors.Wrap(err, "failed to create request")
+			return nil, errors.Wrap(err, fmt.Sprintf("failed to create request. url : %s", u.String()))
 		}
 
 		resp, err := httpClient.Do(req)
 		if err != nil {
-			return nil, errors.Wrap(err, "infra.fetchAtcoderSubmissionAPIResponseList() : failed to send request")
+			return nil, errors.Wrap(err, fmt.Sprintf("failed to send request. url : %s", u.String()))
 		}
 		defer resp.Body.Close()
 
@@ -165,34 +170,29 @@ func (ac atcoderCrawlerImpl) convertToSubmission(ctx context.Context, res atcode
 		return nil, err
 	}
 
-	sourceCode, err := ac.scraper.SourceCode(ctx, url)
-	if err != nil {
-		return nil, err
-	}
-
 	// AtCoder Problems APIからは、AtCoderからスクレイピングした文字列をそのままJSONとして返している
 	// そのため、AtCoderのジャッジステータスとして明言されているものをここでは使用する
 	//   - https://atcoder.jp/contests/abc074/glossary?lang=ja
-	toJudgeStatus := func(result string) model.JudgeStatus {
+	toJudgeStatus := func(result string) judge.Status {
 		switch result {
 		case "AC":
-			return model.Accepted
+			return judge.Accepted
 		case "WA":
-			return model.WrongAnswer
+			return judge.WrongAnswer
 		case "TLE":
-			return model.TimeLimitExceeded
+			return judge.TimeLimitExceeded
 		case "MLE":
-			return model.MemoryLimitExceeded
+			return judge.MemoryLimitExceeded
 		case "RE":
-			return model.CompilationError
+			return judge.RuntimeError
 		case "OLE":
-			return model.OutputLimitExceeded
+			return judge.OutputLimitExceeded
 		case "CE":
-			return model.CompilationError
+			return judge.CompilationError
 		case "IE":
-			return model.InternalError
+			return judge.InternalError
 		}
-		return model.InternalError
+		return judge.InternalError
 	}
 
 	return model.NewSubmission(
@@ -203,6 +203,5 @@ func (ac atcoderCrawlerImpl) convertToSubmission(ctx context.Context, res atcode
 		res.Language,
 		time.Unix(res.EpochSecond, 0),
 		url,
-		sourceCode,
 	), nil
 }

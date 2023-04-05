@@ -1,4 +1,4 @@
-package domain
+package repository
 
 import (
 	"context"
@@ -8,4 +8,5 @@ import (
 
 type SubmissionRepository interface {
 	Save(ctx context.Context, s *model.Submission) error
+	SaveAll(ctx context.Context, submissionList []*model.Submission) error
 }

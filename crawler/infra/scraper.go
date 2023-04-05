@@ -5,12 +5,9 @@ import (
 	"net/url"
 
 	"github.com/gocolly/colly"
+	"github.com/matumoto1234/cp-crawler/domain/service"
 	"github.com/pkg/errors"
 )
-
-type Scraper interface {
-	SourceCode(ctx context.Context, submissionURL *url.URL) (string, error)
-}
 
 type scraperImpl struct {
 	collector *colly.Collector
@@ -29,7 +26,7 @@ func (s scraperImpl) SourceCode(ctx context.Context, submissionURL *url.URL) (st
 	return sourceCode, nil
 }
 
-func NewScraper(collector *colly.Collector) Scraper {
+func NewScraper(collector *colly.Collector) service.Scraper {
 	return &scraperImpl{
 		collector: collector,
 	}

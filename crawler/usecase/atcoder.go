@@ -24,22 +24,22 @@ func (a atcoderUseCaseImpl) CrawlAndSave(ctx context.Context) error {
 	for {
 		// AtCoderに提出できるソースコード長が最大で512Kib
 		// 512 * 1024 * pageSizeがメモリにのっても大丈夫なpageSizeを指定する
-		page, err := a.c.Do(ctx, 50, pageNumber)
+		const pageSize = 50
+
+		page, err := a.c.Do(ctx, pageSize, pageNumber)
 		if err != nil {
 			return err
 		}
 
 		// pageNumber == ceilDiv(page.Paging.TotalCount, 50)のときは最後のページ
-		if pageNumber == ceilDiv(page.Paging.TotalCount, 50) {
+		if pageNumber == ceilDiv(page.Paging.TotalCount, pageSize) {
 			break
 		}
 
 		pageNumber++
 
-		for _, submission := range page.ItemList {
-			if err := a.sr.Save(ctx, submission); err != nil {
-				return err
-			}
+		if err := a.sr.SaveAll(ctx, page.ItemList); err != nil {
+			return err
 		}
 	}
 
