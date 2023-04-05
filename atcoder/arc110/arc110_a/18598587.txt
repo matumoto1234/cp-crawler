@@ -1,2 +1,0 @@
-// detail: https://atcoder.jp/contests/arc110/submissions/18598587
-1
