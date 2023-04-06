@@ -1,53 +1,56 @@
 package usecase
 
 import (
-	"github.com/matumoto1234/cp-crawler/model"
-	"github.com/matumoto1234/cp-crawler/service"
+	"context"
+
+	repository "github.com/matumoto1234/cp-crawler/domain/repository"
 )
 
-type AtCoderUseCase interface {
-	GetSubmissions() ([]*model.Submission, error)
+type AtcoderUseCase interface {
+	CrawlAndSave(ctx context.Context) error
 }
 
-type atCoderUseCaseImpl struct {
-	as service.AtCoderService
+type atcoderUseCaseImpl struct {
+	c  repository.Crawler
+	sr repository.SubmissionRepository
 }
 
-// The AtCoder Problems API will return up to 500 submissions after the specified time.
-// So, If you want to get the all submissions, get each 500 submissions and change specified time.
-func (au *atCoderUseCaseImpl) GetSubmissions() ([]*model.Submission, error) {
-	unixTime := int64(0)
+func NewAtcoderUseCase(crawler repository.Crawler, submissionRepo repository.SubmissionRepository) AtcoderUseCase {
+	return &atcoderUseCaseImpl{
+		c:  crawler,
+		sr: submissionRepo,
+	}
+}
 
-	allSubs := make([]*model.Submission, 0)
-
+func (a atcoderUseCaseImpl) CrawlAndSave(ctx context.Context) error {
+	var pageNumber int
 	for {
-		url, err := au.as.MakeURL(unixTime)
+		// AtCoderに提出できるソースコード長が最大で512Kib
+		// 512 * 1024 * pageSizeがメモリにのっても大丈夫なpageSizeを指定する
+		const pageSize = 50
+
+		page, err := a.c.Do(ctx, pageSize, pageNumber)
 		if err != nil {
-			return nil, err
-		}
-		apis, err := au.as.FetchSubmissions(url)
-		if err != nil {
-			return nil, err
+			return err
 		}
 
-		if len(apis) == 0 {
+		// pageNumber == ceilDiv(page.Paging.TotalCount, 50)のときは最後のページ
+		// TODO: hoge.IsLast(pageNumber)みたいな関数で判定したい
+		//       usecaseにあるビジネスロジックとしてceilDivを使うのはふさわしくないため
+		if pageNumber == ceilDiv(page.Paging.TotalCount, pageSize) {
 			break
 		}
 
-		subs, err := au.as.ConvertToSubmissions(apis)
-		if err != nil {
-			return nil, err
-		}
+		pageNumber++
 
-		allSubs = append(allSubs, subs...)
-		unixTime = subs[len(subs) - 1].SubmittedAt.Unix()
-		unixTime++ // for next submissions
+		if err := a.sr.SaveAll(ctx, page.ItemList); err != nil {
+			return err
+		}
 	}
-	return allSubs, nil
+
+	return nil
 }
 
-func NewAtCoderUseCase(as service.AtCoderService) AtCoderUseCase {
-	return &atCoderUseCaseImpl{
-		as: as,
-	}
+func ceilDiv(a, b int) int {
+	return (a + b - 1) / b
 }
