@@ -48,7 +48,9 @@ func main() {
 		Transport: rlt,
 	}
 
-	var ac repository.Crawler = atcoder.NewAtcoderCrawler(client, r)
+	var ac repository.Crawler = atcoder.NewAtcoderCrawler(
+		atcoder.NewFetcher(client, r),
+	)
 
 	collector := colly.NewCollector()
 
@@ -64,7 +66,12 @@ func main() {
 
 	f := db.NewFileSystem()
 
-	var sr repository.SubmissionRepository = infra.NewSubmissionRepository(g, f, atcoder.NewScraper(collector), infra.NewRepositoryManager(f))
+	var sr repository.SubmissionRepository = infra.NewSubmissionRepository(
+		g,
+		f,
+		atcoder.NewScraper(collector),
+		infra.NewRepositoryManager(f),
+	)
 
 	var au usecase.AtcoderUseCase = usecase.NewAtcoderUseCase(ac, sr)
 

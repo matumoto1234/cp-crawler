@@ -7,5 +7,5 @@ import (
 )
 
 type Crawler interface {
-	Do(ctx context.Context, pageSize, pageNumber int) (*model.Page[*model.Submission], error)
+	Page(ctx context.Context, pageSize, pageNumber uint) (*model.Page[*model.Submission], error)
 }

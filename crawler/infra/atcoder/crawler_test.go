@@ -16,7 +16,7 @@ import (
 	"gopkg.in/dnaeon/go-vcr.v3/recorder"
 )
 
-func Test_AtcoderCrawler_Do(t *testing.T) {
+func Test_AtcoderCrawler_Page(t *testing.T) {
 	if testing.Short() {
 		t.SkipNow()
 	}
@@ -44,12 +44,14 @@ func Test_AtcoderCrawler_Do(t *testing.T) {
 		),
 	}
 
+	f := NewFetcher(client, r)
+
 	const INF = 1 << 30
 
 	tests := []struct {
 		name       string
-		pageSize   int
-		pageNumber int
+		pageSize   uint
+		pageNumber uint
 		wantErr    bool
 	}{
 		{
@@ -71,12 +73,6 @@ func Test_AtcoderCrawler_Do(t *testing.T) {
 			wantErr:    false,
 		},
 		{
-			name:       "負の値のpageNumberによるエラーが発生する",
-			pageSize:   50,
-			pageNumber: -1,
-			wantErr:    true,
-		},
-		{
 			name:       "不適切なpageSizeによるエラーが発生する",
 			pageSize:   0,
 			pageNumber: 0,
@@ -93,14 +89,12 @@ func Test_AtcoderCrawler_Do(t *testing.T) {
 
 			g := goldie.New(t)
 
-			c := repository.Crawler(
-				NewAtcoderCrawler(client, r),
-			)
+			var c repository.Crawler = NewAtcoderCrawler(f)
 
-			got, err := c.Do(context.Background(), test.pageSize, test.pageNumber)
+			got, err := c.Page(context.Background(), test.pageSize, test.pageNumber)
 
 			if (err != nil) != test.wantErr {
-				t.Fatalf("AtcoderCrawler.Do() error = %+v, wantErr %v", err, test.wantErr)
+				t.Fatalf("error = %+v, wantErr %v", err, test.wantErr)
 			}
 
 			g.AssertJson(t, test.name, got)

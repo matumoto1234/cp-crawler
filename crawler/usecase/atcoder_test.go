@@ -22,7 +22,7 @@ func Test_AtcoderUseCase_CrawlAndSave(t *testing.T) {
 		{
 			name: "正常な動作",
 			c: &mock.MockCrawler{
-				FakeDo: func(ctx context.Context, pageSize, pageNumber int) (*model.Page[*model.Submission], error) {
+				FakePage: func(ctx context.Context, pageSize, pageNumber uint) (*model.Page[*model.Submission], error) {
 					return model.NewPage(
 						[]*model.Submission{
 							{
@@ -31,7 +31,7 @@ func Test_AtcoderUseCase_CrawlAndSave(t *testing.T) {
 								Language:     "language",
 							},
 						},
-						model.NewPaging(1, 1),
+						model.NewPaging(1),
 					), nil
 				},
 			},
@@ -46,9 +46,9 @@ func Test_AtcoderUseCase_CrawlAndSave(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "Crawler.Do()によるエラーが発生する",
+			name: "Crawler.Page()によるエラーが発生する",
 			c: &mock.MockCrawler{
-				FakeDo: func(ctx context.Context, pageSize, pageNumber int) (*model.Page[*model.Submission], error) {
+				FakePage: func(ctx context.Context, pageSize, pageNumber uint) (*model.Page[*model.Submission], error) {
 					return nil, errors.New("crawler error")
 				},
 			},
@@ -65,7 +65,7 @@ func Test_AtcoderUseCase_CrawlAndSave(t *testing.T) {
 		{
 			name: "SubmissionRepository.SaveAll()によるエラーが発生する",
 			c: &mock.MockCrawler{
-				FakeDo: func(ctx context.Context, pageSize, pageNumber int) (*model.Page[*model.Submission], error) {
+				FakePage: func(ctx context.Context, pageSize, pageNumber uint) (*model.Page[*model.Submission], error) {
 					return model.NewPage(
 						[]*model.Submission{
 							{
@@ -74,7 +74,7 @@ func Test_AtcoderUseCase_CrawlAndSave(t *testing.T) {
 								Language:     "language",
 							},
 						},
-						model.NewPaging(1, 1),
+						model.NewPaging(1),
 					), nil
 				},
 			},
