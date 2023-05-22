@@ -67,6 +67,7 @@ func (sr submissionRepositoryImpl) Save(ctx context.Context, s *model.Submission
 // SaveAll() : 提出情報リストを保存する
 func (sr submissionRepositoryImpl) SaveAll(ctx context.Context, submissionList []*model.Submission) error {
 	saved := false
+
 	for _, s := range submissionList {
 		exists, err := sr.m.Exists(ctx, s)
 		if err != nil {
@@ -80,6 +81,7 @@ func (sr submissionRepositoryImpl) SaveAll(ctx context.Context, submissionList [
 		if err := sr.writeAndCommit(ctx, s); err != nil {
 			return err
 		}
+
 		saved = true
 	}
 

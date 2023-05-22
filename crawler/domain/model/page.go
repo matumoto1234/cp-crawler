@@ -15,13 +15,11 @@ func NewPage[T any](itemList []T, paging Paging) *Page[T] {
 
 // Value object
 type Paging struct {
-	PageSize   int
-	TotalCount int
+	TotalCount uint
 }
 
-func NewPaging(pageSize, totalCount int) Paging {
+func NewPaging(totalCount uint) Paging {
 	return Paging{
-		PageSize:   pageSize,
 		TotalCount: totalCount,
 	}
 }

@@ -22,7 +22,7 @@ func (s scraperImpl) SourceCode(ctx context.Context, submissionURL *url.URL) (st
 	})
 
 	if err := s.collector.Visit(submissionURL.String()); err != nil {
-		return "", errors.WithStack(err)
+		return "", errors.Wrapf(err, "failed to visit %s", submissionURL.String())
 	}
 
 	s.collector.Wait()
